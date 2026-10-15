@@ -48,6 +48,16 @@ export default function SettingsPage() {
   const [form, setForm] = useState({ apiKey: "", label: "", priority: "0", quotaTotal: "", resetRule: "none" });
   const [msg, setMsg] = useState("");
   const [testing, setTesting] = useState<string | null>(null);
+  // 两步删除确认：替代原生 confirm()——原生对话框在 iframe/嵌入式 WebView 环境下
+  // 会被拦截或直接抛异常，导致"点击删除没反应"（bug01 根因）
+  const [confirmDel, setConfirmDel] = useState<string | null>(null);
+
+  // 确认态 5 秒自动取消，避免按钮长时间处于危险状态
+  useEffect(() => {
+    if (!confirmDel) return;
+    const t = setTimeout(() => setConfirmDel(null), 5000);
+    return () => clearTimeout(t);
+  }, [confirmDel]);
 
   const load = useCallback(async () => {
     const [p, s] = await Promise.all([fetch("/api/providers").then((r) => r.json()), fetch("/api/settings").then((r) => r.json())]);
@@ -90,17 +100,34 @@ export default function SettingsPage() {
   }
 
   async function delKey(id: string) {
-    if (!confirm("确认删除该 Key？")) return;
-    await fetch(`/api/keys/${id}`, { method: "DELETE" });
-    load();
+    setMsg("");
+    // 第一步：进入确认态（按钮变为"确认删除"）
+    if (confirmDel !== id) {
+      setConfirmDel(id);
+      return;
+    }
+    // 第二步：执行删除——乐观更新（界面立即消失），失败回滚并明确报错，不再静默
+    setConfirmDel(null);
+    const backup = providers;
+    setProviders((prev) => prev.map((p) => ({ ...p, keys: p.keys.filter((k) => k.id !== id) })));
+    try {
+      const res = await fetch(`/api/keys/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error(`服务端返回 HTTP ${res.status}`);
+      setMsg("✓ 已删除");
+    } catch (e) {
+      setProviders(backup); // 回滚，界面恢复原状
+      setMsg(`✗ 删除失败：${e instanceof Error ? e.message : String(e)}（已恢复，请重试）`);
+    }
   }
 
   async function testKey(id: string) {
     setTesting(id);
+    setMsg("");
     const r = await fetch(`/api/keys/${id}/test`, { method: "POST" });
     const d = await r.json();
     setTesting(null);
-    alert(d.ok ? `✓ ${d.msg}` : `✗ ${d.msg}`);
+    // 用页内消息替代 alert()——同样会被 iframe/WebView 拦截
+    setMsg(d.ok ? `✓ ${d.msg}` : `✗ ${d.msg}`);
     load();
   }
 
@@ -169,7 +196,7 @@ export default function SettingsPage() {
       <section className="space-y-3">
         <div className="flex items-center">
           <h2 className="text-sm font-semibold text-gray-800">平台与 Key（一个平台可挂多个 Key，同平台不重复）</h2>
-          {msg && <span className="ml-auto text-xs text-green-600">{msg}</span>}
+          {msg && <span className={`ml-auto text-xs ${msg.startsWith("✗") ? "text-red-600" : "text-green-600"}`}>{msg}</span>}
         </div>
         {providers.map((p) => {
           const cap = p.capability ?? {};
@@ -246,7 +273,14 @@ export default function SettingsPage() {
                               <button onClick={() => testKey(k.id)} disabled={testing === k.id} className="text-brand-600 hover:underline disabled:opacity-40">{testing === k.id ? "测试中" : "测试"}</button>
                               <button onClick={() => patchKey(k.id, { status: k.status === "disabled" ? "active" : "disabled" })} className="text-gray-400 hover:text-gray-600">{k.status === "disabled" ? "启用" : "禁用"}</button>
                               <button onClick={() => patchKey(k.id, { resetQuota: true })} className="text-gray-400 hover:text-gray-600">重置额度</button>
-                              <button onClick={() => delKey(k.id)} className="text-gray-400 hover:text-red-500">删除</button>
+                              {confirmDel === k.id ? (
+                                <>
+                                  <button onClick={() => delKey(k.id)} className="font-medium text-red-600 hover:underline">确认删除</button>
+                                  <button onClick={() => { setConfirmDel(null); setMsg(""); }} className="text-gray-400 hover:text-gray-600">取消</button>
+                                </>
+                              ) : (
+                                <button onClick={() => delKey(k.id)} className="text-gray-400 hover:text-red-500">删除</button>
+                              )}
                             </div>
                           </td>
                         </tr>
