@@ -1,0 +1,25 @@
+# dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# next
+.next/
+out/
+next-env.d.ts
+
+# data (数据库/媒体/密钥，永不入库)
+data/
+prisma/*.db
+prisma/*.db-journal
+
+# env
+.env
+.env.local
+.env.*.local
+
+# misc
+*.log
+*.tsbuildinfo
+.DS_Store
+Thumbs.db

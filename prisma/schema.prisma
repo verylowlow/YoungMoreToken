@@ -1,0 +1,95 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+/// 平台（供应商）注册表：内置适配器 + 能力清单 manifest
+model Provider {
+  id        String   @id @default(cuid())
+  slug      String   @unique
+  name      String
+  kind      String // builtin | custom_http
+  modalities String // JSON 数组：["video","image","audio"]
+  manifest  String // JSON：Capability 能力清单
+  quality   Float    @default(0) // 质量分 0~100，用户可覆盖
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  keys      ApiKey[]
+}
+
+/// 平台 API Key：一个平台可挂多个 key，同平台 key 不重复
+model ApiKey {
+  id           String    @id @default(cuid())
+  providerId   String
+  provider     Provider  @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  label        String    @default("") // 用户备注，如 "Vidu 号2"
+  keyEnc       String // AES-256-GCM 密文
+  keyHash      String // HMAC(providerId + key)，用于查重
+  priority     Float     @default(0) // 用户手动加权
+  status       String    @default("active") // active | exhausted | invalid | disabled
+  quotaTotal   Float? // 本期总额度（本地账本单位）
+  quotaUsed    Float     @default(0)
+  resetRule    String    @default("none") // none | daily | monthly
+  resetAt      DateTime?
+  cooldownTill DateTime? // 限流冷却截止
+  health       Float     @default(1) // 近期成功率 0~1（动态）
+  successCount Int       @default(0)
+  failCount    Int       @default(0)
+  avgLatencyMs Int       @default(0)
+  createdAt    DateTime  @default(now())
+
+  @@unique([providerId, keyHash])
+}
+
+/// 生成任务：完整参数留档，可复现
+model Task {
+  id           String    @id @default(cuid())
+  modality     String // video | image | audio
+  status       String    @default("queued") // queued | running | succeeded | failed | canceled
+  request      String // JSON：NormalizedRequest
+  providerId   String?
+  apiKeyId     String?
+  attempts     Int       @default(0)
+  errorCode    String?
+  errorMsg     String?
+  mediaIds     String? // JSON：产物 media id 列表
+  costEstimate Float?
+  queuedAt     DateTime  @default(now())
+  startedAt    DateTime?
+  finishedAt   DateTime?
+}
+
+/// 媒体文件（含用户上传的输入素材）
+model Media {
+  id         String   @id @default(cuid())
+  taskId     String? // 输入素材为空
+  kind       String // input | video | image | audio
+  uri        String // 相对 data/media 的路径
+  mime       String
+  width      Int?
+  height     Int?
+  durationMs Int?
+  sizeBytes  Int?
+  watermark  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+}
+
+/// 额度流水：消耗/重置/人工调整全记录，可审计
+model QuotaEvent {
+  id        String   @id @default(cuid())
+  apiKeyId  String
+  delta     Float // 消耗记负，重置记正
+  reason    String // consume | reset | manual
+  taskId    String?
+  createdAt DateTime @default(now())
+}
+
+/// 系统设置：路由策略 / 权重 / 媒体供给策略
+model Setting {
+  key   String @id
+  value String
+}
