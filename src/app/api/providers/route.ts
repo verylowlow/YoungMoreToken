@@ -15,6 +15,7 @@ export async function GET() {
       name: p.name,
       kind: p.kind,
       modalities: JSON.parse(p.modalities) as string[],
+      region: p.region ?? "intl",
       quality: p.quality || cap.quality || 50,
       enabled: p.enabled,
       capability: cap,

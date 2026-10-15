@@ -72,6 +72,8 @@ export const meta = {
   slug: "edge-tts",
   name: "Edge-TTS（免费·无需Key）",
   modalities: ["audio" as const],
+  // 微软 speech.platform.bing.com 国内可直接连通（本机 sidecar 实测成功），归国内组
+  region: "cn",
   quality: 72,
   docs: "https://github.com/rany2/edge-tts",
 };

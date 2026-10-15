@@ -11,6 +11,7 @@ export const meta = {
   slug: "elevenlabs-tts",
   name: "ElevenLabs（TTS 免费档）",
   modalities: ["audio" as const],
+  region: "intl",
   quality: 92,
   docs: "https://elevenlabs.io/docs",
 };

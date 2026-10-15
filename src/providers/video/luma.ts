@@ -12,6 +12,7 @@ export const meta = {
   slug: "luma",
   name: "Luma Dream Machine（API）",
   modalities: ["video" as const],
+  region: "intl",
   quality: 80,
   docs: "https://docs.lumalabs.ai",
 };

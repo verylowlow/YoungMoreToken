@@ -23,3 +23,6 @@ prisma/*.db-journal
 *.tsbuildinfo
 .DS_Store
 Thumbs.db
+
+# 本地 E2E 验证脚本（含本机 playwright 绝对路径，不入库）
+scripts/

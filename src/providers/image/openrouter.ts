@@ -12,6 +12,7 @@ export const meta = {
   slug: "openrouter-image",
   name: "OpenRouter（图像模型）",
   modalities: ["image" as const],
+  region: "intl",
   quality: 82,
   docs: "https://openrouter.ai/docs",
 };

@@ -13,6 +13,7 @@ export const meta = {
   slug: "modelscope-wan2",
   name: "魔搭 ModelScope（Wan2.2 免费API）",
   modalities: ["video" as const],
+  region: "cn",
   quality: 62,
   docs: "https://modelscope.cn/docs/model-inference/api-inference",
 };

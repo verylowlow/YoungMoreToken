@@ -12,6 +12,7 @@ export const meta = {
   slug: "modelscope-image",
   name: "魔搭 ModelScope（Qwen-Image 免费API）",
   modalities: ["image" as const],
+  region: "cn",
   quality: 78,
   docs: "https://modelscope.cn/docs/model-inference/api-inference",
 };

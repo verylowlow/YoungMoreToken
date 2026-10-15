@@ -1,14 +1,17 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 // ===== 设置中心：Key 管理 + 平台目录 + 路由策略 =====
+// 平台按模态分 TAB，TAB 内按国内/海外分组——国内直连友好，
+// 海外源在国内网络下可能连不上（路由失败会自动降级，不必手动禁用）。
 
 interface ProviderItem {
   id: string;
   slug: string;
   name: string;
   modalities: string[];
+  region: string;
   quality: number;
   enabled: boolean;
   capability: any;
@@ -27,24 +30,54 @@ interface ProviderItem {
 }
 
 const KEY_HINTS: Record<string, string> = {
+  // 视频·国内
   "modelscope-wan2": "魔搭 API Token（社区 → 个人中心获取）",
-  "modelscope-image": "魔搭 API Token（需实名阿里云账号）",
-  kling: "格式：accessKey|secretKey（国际版控制台）",
+  "agnes-video": "Agnes AI API Key（apihub.agnes-ai.com 注册，免费）",
+  "zhipu-video": "智谱开放平台 API Key（open.bigmodel.cn）",
+  "minimax-video": "格式：apiKey|GroupId（MiniMax 开放平台）",
+  "dashscope-video": "阿里云百炼 API Key（DashScope）",
+  "volcengine-video": "火山引擎 API Key；model 可填 ep- 端点 ID",
   vidu: "Vidu 平台 API Key",
+  kling: "格式：accessKey|secretKey（可灵控制台）",
+  // 视频·海外
+  "runway-video": "Runway API Key（api.dev.runwayml.com）",
   luma: "Luma API Key",
+  // 图片·国内
+  "modelscope-image": "魔搭 API Token（需实名阿里云账号）",
+  "siliconflow-image": "硅基流动 API Key（注册送 ¥14，Kolors/Qwen-Image 免费）",
+  "zhipu-image": "智谱开放平台 API Key（CogView-3-Flash 免费）",
+  "dashscope-image": "阿里云百炼 API Key（90 天免费 100 张）",
+  // 图片·海外
   "cloudflare-flux": "格式：accountId|apiToken（Cloudflare 控制台）",
+  "together-image": "Together AI API Key（FLUX.1-schnell 免费档）",
+  "agnes-image": "Agnes AI API Key（apihub.agnes-ai.com 注册，免费）",
+  "stability-image": "Stability AI API Key（注册赠额度）",
+  "openai-image": "OpenAI API Key（gpt-image-1，按量付费）",
   "openrouter-image": "OpenRouter API Key",
-  "edge-tts": "免费通道，无需 Key——随便填个占位符（如 edge）即可",
+  // 音频·国内
+  "edge-tts": "免费通道，无需 Key——随便填个占位符（如 edge）即可；需本机 Python + pip install edge-tts",
+  "siliconflow-tts": "硅基流动 API Key（CosyVoice2 免费）",
+  "minimax-tts": "格式：apiKey|GroupId（MiniMax 开放平台）",
+  // 音频·海外
+  "google-tts": "Google Cloud API Key（需开启 TTS，每月 100 万标准音色字符免费）",
+  "openai-tts": "OpenAI API Key（tts-1 系列，按量付费）",
   "elevenlabs-tts": "ElevenLabs API Key（免费档 1 万字符/月）",
   "azure-tts": "格式：subscriptionKey|region（如 key|eastasia）",
 };
 
 const MODALITY_BADGE: Record<string, string> = { video: "视频", image: "图片", audio: "音频" };
+const REGION_BADGE: Record<string, { label: string; cls: string }> = {
+  cn: { label: "国内", cls: "bg-red-50 text-red-600" },
+  intl: { label: "海外", cls: "bg-blue-50 text-blue-600" },
+};
+
+type TabId = "all" | "video" | "image" | "audio";
 
 export default function SettingsPage() {
   const [providers, setProviders] = useState<ProviderItem[]>([]);
   const [settings, setSettings] = useState<Record<string, string>>({});
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [tab, setTab] = useState<TabId>("all");
   const [form, setForm] = useState({ apiKey: "", label: "", priority: "0", quotaTotal: "", resetRule: "none" });
   const [msg, setMsg] = useState("");
   const [testing, setTesting] = useState<string | null>(null);
@@ -141,6 +174,125 @@ export default function SettingsPage() {
     load();
   }
 
+  // ===== TAB 计数与分组 =====
+  const counts = useMemo(() => {
+    const c: Record<string, number> = { all: providers.length, video: 0, image: 0, audio: 0 };
+    for (const p of providers) for (const m of p.modalities) c[m] = (c[m] ?? 0) + 1;
+    return c;
+  }, [providers]);
+
+  const grouped = useMemo(() => {
+    const filtered = providers.filter((p) => tab === "all" || p.modalities.includes(tab));
+    return [
+      { region: "cn", title: "国内平台", desc: "国内网络直连友好，优先消耗", list: filtered.filter((p) => (p.region ?? "intl") === "cn") },
+      { region: "intl", title: "海外平台", desc: "国内访问可能需要代理；连不上时路由会自动降级换源，不必手动禁用", list: filtered.filter((p) => (p.region ?? "intl") !== "cn") },
+    ].filter((g) => g.list.length > 0);
+  }, [providers, tab]);
+
+  const tabs: { id: TabId; label: string }[] = [
+    { id: "all", label: `全部 ${counts.all}` },
+    { id: "video", label: `视频 ${counts.video ?? 0}` },
+    { id: "image", label: `图片 ${counts.image ?? 0}` },
+    { id: "audio", label: `音频 ${counts.audio ?? 0}` },
+  ];
+
+  function renderCard(p: ProviderItem) {
+    const cap = p.capability ?? {};
+    const open = expanded === p.id;
+    const rb = REGION_BADGE[p.region ?? "intl"] ?? REGION_BADGE.intl;
+    return (
+      <div key={p.id} className={`rounded-xl border bg-white p-4 ${p.enabled ? "border-gray-200" : "border-gray-100 opacity-60"}`}>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="font-medium text-gray-800">{p.name}</span>
+          <span className={`rounded px-1.5 py-0.5 text-xs ${rb.cls}`}>{rb.label}</span>
+          <span className="rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-500">质量 {p.quality}</span>
+          {p.modalities.map((m) => (
+            <span key={m} className="rounded bg-brand-50 px-1.5 py-0.5 text-xs text-brand-600">{MODALITY_BADGE[m] ?? m}</span>
+          ))}
+          <span className="text-xs text-gray-400">
+            {cap.durations ? `时长 ${cap.durations.join("/")}s` : ""}
+            {cap.resolutions ? ` · ${cap.resolutions.join("/")}` : ""}
+            {cap.watermark_on_free ? " · 免费档带水印" : ""}
+            {cap.commercial_ok === false ? " · 限非商用" : ""}
+          </span>
+          <div className="ml-auto flex items-center gap-2 text-xs">
+            <span className="text-gray-400">{p.keys.filter((k) => k.status === "active").length} 个可用 Key</span>
+            <button onClick={() => patchProvider(p.id, { enabled: !p.enabled })} className="text-gray-400 hover:text-gray-600">
+              {p.enabled ? "禁用" : "启用"}
+            </button>
+            <button onClick={() => setExpanded(open ? null : p.id)} className="rounded-md bg-brand-600 px-2.5 py-1 text-white hover:bg-brand-800">
+              + 添加 Key
+            </button>
+          </div>
+        </div>
+
+        {open && (
+          <div className="mt-3 space-y-2 rounded-lg bg-gray-50 p-3">
+            <p className="text-xs text-gray-400">Key 格式：{KEY_HINTS[p.slug] ?? "平台 API Key"}</p>
+            <div className="grid gap-2 sm:grid-cols-[1fr_1fr_80px_100px_100px_auto]">
+              <input value={form.apiKey} onChange={(e) => setForm({ ...form, apiKey: e.target.value })} placeholder="API Key" className="rounded-md border border-gray-300 px-2 py-1.5 text-sm" />
+              <input value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} placeholder="备注（如 Vidu 号2）" className="rounded-md border border-gray-300 px-2 py-1.5 text-sm" />
+              <input value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })} placeholder="优先级" title="优先级 0-10，付费 key 可调高" className="rounded-md border border-gray-300 px-2 py-1.5 text-sm" />
+              <input value={form.quotaTotal} onChange={(e) => setForm({ ...form, quotaTotal: e.target.value })} placeholder="总额度" title="本期总额度（留空=不限）" className="rounded-md border border-gray-300 px-2 py-1.5 text-sm" />
+              <select value={form.resetRule} onChange={(e) => setForm({ ...form, resetRule: e.target.value })} className="rounded-md border border-gray-300 px-2 py-1.5 text-sm">
+                <option value="none">不重置</option>
+                <option value="daily">每日重置</option>
+                <option value="monthly">每月重置</option>
+              </select>
+              <button onClick={() => addKey(p.id)} className="rounded-md bg-gray-900 px-3 py-1.5 text-sm text-white hover:bg-gray-700">保存</button>
+            </div>
+          </div>
+        )}
+
+        {p.keys.length > 0 && (
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead className="text-left text-gray-400">
+                <tr><th className="py-1.5 pr-3 font-medium">备注</th><th className="py-1.5 pr-3 font-medium">状态</th><th className="py-1.5 pr-3 font-medium">额度</th><th className="py-1.5 pr-3 font-medium">成功/失败</th><th className="py-1.5 pr-3 font-medium">均耗时</th><th className="py-1.5 pr-3 font-medium">操作</th></tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {p.keys.map((k) => (
+                  <tr key={k.id}>
+                    <td className="py-1.5 pr-3 text-gray-700">{k.label || "—"}</td>
+                    <td className="py-1.5 pr-3">
+                      <span className={`rounded px-1.5 py-0.5 ${
+                        k.status === "active" ? "bg-green-50 text-green-600" :
+                        k.status === "exhausted" ? "bg-amber-50 text-amber-600" :
+                        k.status === "invalid" ? "bg-red-50 text-red-600" : "bg-gray-100 text-gray-500"
+                      }`}>
+                        {k.status === "active" ? "可用" : k.status === "exhausted" ? "耗尽" : k.status === "invalid" ? "失效" : "禁用"}
+                      </span>
+                    </td>
+                    <td className="py-1.5 pr-3 text-gray-500">
+                      {k.quotaTotal ? `${Math.round(k.quotaUsed)}/${k.quotaTotal}（${k.resetRule === "daily" ? "日" : k.resetRule === "monthly" ? "月" : "总"}）` : `${Math.round(k.quotaUsed)}（不限）`}
+                    </td>
+                    <td className="py-1.5 pr-3 text-gray-500">{k.successCount}/{k.failCount}</td>
+                    <td className="py-1.5 pr-3 text-gray-500">{k.avgLatencyMs ? `${(k.avgLatencyMs / 1000).toFixed(1)}s` : "—"}</td>
+                    <td className="py-1.5 pr-3">
+                      <div className="flex gap-2">
+                        <button onClick={() => testKey(k.id)} disabled={testing === k.id} className="text-brand-600 hover:underline disabled:opacity-40">{testing === k.id ? "测试中" : "测试"}</button>
+                        <button onClick={() => patchKey(k.id, { status: k.status === "disabled" ? "active" : "disabled" })} className="text-gray-400 hover:text-gray-600">{k.status === "disabled" ? "启用" : "禁用"}</button>
+                        <button onClick={() => patchKey(k.id, { resetQuota: true })} className="text-gray-400 hover:text-gray-600">重置额度</button>
+                        {confirmDel === k.id ? (
+                          <>
+                            <button onClick={() => delKey(k.id)} className="font-medium text-red-600 hover:underline">确认删除</button>
+                            <button onClick={() => { setConfirmDel(null); setMsg(""); }} className="text-gray-400 hover:text-gray-600">取消</button>
+                          </>
+                        ) : (
+                          <button onClick={() => delKey(k.id)} className="text-gray-400 hover:text-red-500">删除</button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* 路由策略 */}
@@ -192,106 +344,38 @@ export default function SettingsPage() {
         </div>
       </section>
 
-      {/* 平台与 Key */}
+      {/* 平台与 Key：模态 TAB + 国内外分组 */}
       <section className="space-y-3">
-        <div className="flex items-center">
+        <div className="flex flex-wrap items-center gap-3">
           <h2 className="text-sm font-semibold text-gray-800">平台与 Key（一个平台可挂多个 Key，同平台不重复）</h2>
+          <div className="flex gap-1 rounded-lg bg-gray-100 p-1">
+            {tabs.map((t) => (
+              <button
+                key={t.id}
+                onClick={() => setTab(t.id)}
+                className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${tab === t.id ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
           {msg && <span className={`ml-auto text-xs ${msg.startsWith("✗") ? "text-red-600" : "text-green-600"}`}>{msg}</span>}
         </div>
-        {providers.map((p) => {
-          const cap = p.capability ?? {};
-          const open = expanded === p.id;
-          return (
-            <div key={p.id} className={`rounded-xl border bg-white p-4 ${p.enabled ? "border-gray-200" : "border-gray-100 opacity-60"}`}>
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="font-medium text-gray-800">{p.name}</span>
-                <span className="rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-500">质量 {p.quality}</span>
-                {p.modalities.map((m) => (
-                  <span key={m} className="rounded bg-brand-50 px-1.5 py-0.5 text-xs text-brand-600">{MODALITY_BADGE[m] ?? m}</span>
-                ))}
-                <span className="text-xs text-gray-400">
-                  {cap.durations ? `时长 ${cap.durations.join("/")}s` : ""}
-                  {cap.resolutions ? ` · ${cap.resolutions.join("/")}` : ""}
-                  {cap.watermark_on_free ? " · 免费档带水印" : ""}
-                  {cap.commercial_ok === false ? " · 限非商用" : ""}
-                </span>
-                <div className="ml-auto flex items-center gap-2 text-xs">
-                  <span className="text-gray-400">{p.keys.filter((k) => k.status === "active").length} 个可用 Key</span>
-                  <button onClick={() => patchProvider(p.id, { enabled: !p.enabled })} className="text-gray-400 hover:text-gray-600">
-                    {p.enabled ? "禁用" : "启用"}
-                  </button>
-                  <button onClick={() => setExpanded(open ? null : p.id)} className="rounded-md bg-brand-600 px-2.5 py-1 text-white hover:bg-brand-800">
-                    + 添加 Key
-                  </button>
-                </div>
-              </div>
 
-              {open && (
-                <div className="mt-3 space-y-2 rounded-lg bg-gray-50 p-3">
-                  <p className="text-xs text-gray-400">Key 格式：{KEY_HINTS[p.slug] ?? "平台 API Key"}</p>
-                  <div className="grid gap-2 sm:grid-cols-[1fr_1fr_80px_100px_100px_auto]">
-                    <input value={form.apiKey} onChange={(e) => setForm({ ...form, apiKey: e.target.value })} placeholder="API Key" className="rounded-md border border-gray-300 px-2 py-1.5 text-sm" />
-                    <input value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} placeholder="备注（如 Vidu 号2）" className="rounded-md border border-gray-300 px-2 py-1.5 text-sm" />
-                    <input value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })} placeholder="优先级" title="优先级 0-10，付费 key 可调高" className="rounded-md border border-gray-300 px-2 py-1.5 text-sm" />
-                    <input value={form.quotaTotal} onChange={(e) => setForm({ ...form, quotaTotal: e.target.value })} placeholder="总额度" title="本期总额度（留空=不限）" className="rounded-md border border-gray-300 px-2 py-1.5 text-sm" />
-                    <select value={form.resetRule} onChange={(e) => setForm({ ...form, resetRule: e.target.value })} className="rounded-md border border-gray-300 px-2 py-1.5 text-sm">
-                      <option value="none">不重置</option>
-                      <option value="daily">每日重置</option>
-                      <option value="monthly">每月重置</option>
-                    </select>
-                    <button onClick={() => addKey(p.id)} className="rounded-md bg-gray-900 px-3 py-1.5 text-sm text-white hover:bg-gray-700">保存</button>
-                  </div>
-                </div>
-              )}
-
-              {p.keys.length > 0 && (
-                <div className="mt-3 overflow-x-auto">
-                  <table className="w-full text-xs">
-                    <thead className="text-left text-gray-400">
-                      <tr><th className="py-1.5 pr-3 font-medium">备注</th><th className="py-1.5 pr-3 font-medium">状态</th><th className="py-1.5 pr-3 font-medium">额度</th><th className="py-1.5 pr-3 font-medium">成功/失败</th><th className="py-1.5 pr-3 font-medium">均耗时</th><th className="py-1.5 pr-3 font-medium">操作</th></tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-50">
-                      {p.keys.map((k) => (
-                        <tr key={k.id}>
-                          <td className="py-1.5 pr-3 text-gray-700">{k.label || "—"}</td>
-                          <td className="py-1.5 pr-3">
-                            <span className={`rounded px-1.5 py-0.5 ${
-                              k.status === "active" ? "bg-green-50 text-green-600" :
-                              k.status === "exhausted" ? "bg-amber-50 text-amber-600" :
-                              k.status === "invalid" ? "bg-red-50 text-red-600" : "bg-gray-100 text-gray-500"
-                            }`}>
-                              {k.status === "active" ? "可用" : k.status === "exhausted" ? "耗尽" : k.status === "invalid" ? "失效" : "禁用"}
-                            </span>
-                          </td>
-                          <td className="py-1.5 pr-3 text-gray-500">
-                            {k.quotaTotal ? `${Math.round(k.quotaUsed)}/${k.quotaTotal}（${k.resetRule === "daily" ? "日" : k.resetRule === "monthly" ? "月" : "总"}）` : `${Math.round(k.quotaUsed)}（不限）`}
-                          </td>
-                          <td className="py-1.5 pr-3 text-gray-500">{k.successCount}/{k.failCount}</td>
-                          <td className="py-1.5 pr-3 text-gray-500">{k.avgLatencyMs ? `${(k.avgLatencyMs / 1000).toFixed(1)}s` : "—"}</td>
-                          <td className="py-1.5 pr-3">
-                            <div className="flex gap-2">
-                              <button onClick={() => testKey(k.id)} disabled={testing === k.id} className="text-brand-600 hover:underline disabled:opacity-40">{testing === k.id ? "测试中" : "测试"}</button>
-                              <button onClick={() => patchKey(k.id, { status: k.status === "disabled" ? "active" : "disabled" })} className="text-gray-400 hover:text-gray-600">{k.status === "disabled" ? "启用" : "禁用"}</button>
-                              <button onClick={() => patchKey(k.id, { resetQuota: true })} className="text-gray-400 hover:text-gray-600">重置额度</button>
-                              {confirmDel === k.id ? (
-                                <>
-                                  <button onClick={() => delKey(k.id)} className="font-medium text-red-600 hover:underline">确认删除</button>
-                                  <button onClick={() => { setConfirmDel(null); setMsg(""); }} className="text-gray-400 hover:text-gray-600">取消</button>
-                                </>
-                              ) : (
-                                <button onClick={() => delKey(k.id)} className="text-gray-400 hover:text-red-500">删除</button>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+        {grouped.map((g) => (
+          <div key={g.region} className="space-y-2">
+            <div className="flex items-baseline gap-2">
+              <h3 className="text-xs font-semibold text-gray-600">
+                {g.region === "cn" ? "🇨🇳" : "🌐"} {g.title}
+                <span className="ml-1 font-normal text-gray-400">（{g.list.length} 个）</span>
+              </h3>
+              <span className="text-xs text-gray-400">{g.desc}</span>
             </div>
-          );
-        })}
+            {g.list.map(renderCard)}
+          </div>
+        ))}
+
+        {grouped.length === 0 && <p className="py-8 text-center text-sm text-gray-400">该模态下暂无平台</p>}
       </section>
 
       <p className="text-xs leading-relaxed text-gray-400">

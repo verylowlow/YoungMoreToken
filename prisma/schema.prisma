@@ -16,6 +16,7 @@ model Provider {
   modalities String // JSON 数组：["video","image","audio"]
   manifest  String // JSON：Capability 能力清单
   quality   Float    @default(0) // 质量分 0~100，用户可覆盖
+  region    String   @default("intl") // cn=国内直连友好 | intl=海外（国内可能需代理）
   enabled   Boolean  @default(true)
   createdAt DateTime @default(now())
   keys      ApiKey[]

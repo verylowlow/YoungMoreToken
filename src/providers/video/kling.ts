@@ -14,6 +14,7 @@ export const meta = {
   slug: "kling",
   name: "可灵 Kling（国际版 API）",
   modalities: ["video" as const],
+  region: "cn",
   quality: 88,
   docs: "https://app.klingai.com/global/dev/document-api",
 };

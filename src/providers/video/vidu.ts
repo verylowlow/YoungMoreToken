@@ -12,6 +12,7 @@ export const meta = {
   slug: "vidu",
   name: "Vidu（API）",
   modalities: ["video" as const],
+  region: "cn",
   quality: 84,
   docs: "https://platform.vidu.cn/docs",
 };

@@ -12,6 +12,7 @@ export const meta = {
   slug: "cloudflare-flux",
   name: "Cloudflare Workers AI（FLUX 免费API）",
   modalities: ["image" as const],
+  region: "intl",
   quality: 70,
   docs: "https://developers.cloudflare.com/workers-ai/models/flux-1-schnell",
 };

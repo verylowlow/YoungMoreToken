@@ -9,6 +9,7 @@ export const meta = {
   slug: "azure-tts",
   name: "Azure TTS（免费档 50 万字符/月）",
   modalities: ["audio" as const],
+  region: "intl",
   quality: 85,
   docs: "https://learn.microsoft.com/azure/ai-services/speech-service",
 };
