@@ -10,6 +10,7 @@ import type { Capability, NormalizedRequest, ResolvedKey, ScoredKey } from "./ty
 
 /** 能力匹配：用户选的参数反过来决定哪些源有资格服务 */
 export function capabilitySatisfies(cap: Capability, req: NormalizedRequest): boolean {
+  if (cap.modalities?.length && !cap.modalities.includes(req.modality)) return false;
   if (req.duration_s && cap.durations?.length && !cap.durations.includes(req.duration_s)) return false;
   if (req.ratio && cap.ratios?.length && !cap.ratios.includes(req.ratio)) return false;
   if (req.resolution && cap.resolutions?.length && !cap.resolutions.includes(req.resolution)) return false;
@@ -38,6 +39,7 @@ export async function listCandidates(req: NormalizedRequest, excludeKeyIds: stri
   for (const p of providers) {
     const adapter = getAdapter(p.slug);
     if (!adapter) continue; // 未注册适配器的平台跳过（如待实现的自定义模板）
+    if (!adapter.modalities.includes(req.modality)) continue; // 模态不配，直接出局
     const cap = adapter.capabilities();
     if (!capabilitySatisfies(cap, req)) continue;
 

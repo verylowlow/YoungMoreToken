@@ -37,6 +37,7 @@ export interface NormalizedRequest {
 
 /** 平台能力清单（manifest）：驱动"参数反选可用源" */
 export interface Capability {
+  modalities?: Modality[]; // 支持的模态（兜底校验，真源是 adapter.modalities）
   durations?: number[]; // 支持的时长（秒）
   ratios?: Ratio[];
   resolutions?: Resolution[];
@@ -90,6 +91,8 @@ export type ErrorClass =
 /** 适配器协议：每家上游一个实现 */
 export interface ProviderAdapter {
   slug: string;
+  /** 该适配器服务的模态（路由第一道过滤：模态不配，参数再好也不选） */
+  modalities: readonly Modality[];
   capabilities(): Capability;
   submit(req: NormalizedRequest, key: ResolvedKey): Promise<UpstreamJob>;
   poll?(job: UpstreamJob, key: ResolvedKey): Promise<UpstreamJob>;

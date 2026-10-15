@@ -33,7 +33,7 @@ export async function seedProviders() {
   for (const a of allAdapters()) {
     const m = METAS.find((x) => x.slug === a.slug);
     if (!m) continue;
-    const manifest = JSON.stringify(a.capabilities());
+    const manifest = JSON.stringify({ modalities: a.modalities, ...a.capabilities() });
     await prisma.provider.upsert({
       where: { slug: a.slug },
       create: {

@@ -34,6 +34,7 @@ const CAPABILITY: Capability = {
 
 export const adapter: ProviderAdapter = {
   slug: meta.slug,
+  modalities: meta.modalities,
   capabilities: () => CAPABILITY,
 
   async submit(req: NormalizedRequest, key: ResolvedKey): Promise<UpstreamJob> {

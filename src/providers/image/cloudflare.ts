@@ -51,6 +51,7 @@ function sizeOf(ratio?: string, res?: string): { width: number; height: number }
 
 export const adapter: ProviderAdapter = {
   slug: meta.slug,
+  modalities: meta.modalities,
   capabilities: () => CAPABILITY,
 
   async submit(req: NormalizedRequest, key: ResolvedKey): Promise<UpstreamJob> {

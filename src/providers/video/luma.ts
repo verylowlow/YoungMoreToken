@@ -39,6 +39,7 @@ function wrap(fn: () => Promise<UpstreamJob>) {
 
 export const adapter: ProviderAdapter = {
   slug: meta.slug,
+  modalities: meta.modalities,
   capabilities: () => CAPABILITY,
 
   async submit(req: NormalizedRequest, key: ResolvedKey): Promise<UpstreamJob> {
